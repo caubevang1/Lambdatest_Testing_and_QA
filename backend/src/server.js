@@ -11,6 +11,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { connectDB } from "./config/db.js";
 import { startCronJobs } from "./utils/cronJob.js";
+import { seedDefaultAccounts } from "./utils/seed.js";
 
 import authRoutes from "./routes/auth.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
@@ -37,6 +38,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/uploads", express.static("uploads"));
 
 await connectDB();
+await seedDefaultAccounts();
 startCronJobs();
 
 app.get("/", (req, res) => res.send("✅ VolunteerHub Backend API is running..."));

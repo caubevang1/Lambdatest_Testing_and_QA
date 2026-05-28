@@ -10,6 +10,13 @@ export async function sendOtpEmail(
   otp,
   subject = "Mã xác thực OTP"
 ) {
+  const isTestMode =
+    String(process.env.OTP_TEST_MODE || "").toLowerCase() === "true";
+  if (isTestMode) {
+    console.log(`[OTP][TEST] to=${to} otp=${otp} subject=${subject}`);
+    return;
+  }
+
   if (!process.env.SMTP_EMAIL || !process.env.SMTP_PASS) {
     throw new Error("SMTP chưa được cấu hình (thiếu SMTP_EMAIL/SMTP_PASS)");
   }
