@@ -14,11 +14,11 @@
 
 Mở **3 terminal riêng biệt**, chạy theo thứ tự:
 
-**Terminal 1 — MongoDB (Docker)**
+**Terminal 1 — MongoDB (Docker Compose)**
 ```bash
-docker run -d --name mongodb -p 27017:27017 mongo:latest
+docker compose up -d
 ```
-> Nếu container đã tồn tại từ lần trước: `docker start mongodb`
+> Dừng: `docker compose down` — Dừng và xóa data: `docker compose down -v`
 
 **Terminal 2 — Backend**
 ```bash
@@ -60,18 +60,9 @@ npx cross-env E2E_HEADLESS=false jest --config jest.selenium.config.cjs selenium
 **Chạy E2E trên TestMu AI cloud grid:**
 ```bash
 cd frontend
-set LT_USERNAME=your_username
-set LT_ACCESS_KEY=your_access_key
 npm run test:testmuai
 ```
-
-PowerShell:
-```powershell
-cd frontend
-$Env:LT_USERNAME="your_username"
-$Env:LT_ACCESS_KEY="your_access_key"
-npm run test:testmuai
-```
+> `LT_USERNAME` và `LT_ACCESS_KEY` được đọc tự động từ `frontend/.env`.
 
 **Chạy một test case theo ID:**
 ```bash
@@ -304,8 +295,8 @@ npm install
 
 **MongoDB connection failed:**
 ```bash
-docker ps           # kiem tra container co dang chay khong
-docker start mongodb
+docker compose ps        # kiem tra container co dang chay khong
+docker compose up -d     # khoi dong lai neu chua chay
 ```
 
 **Seed không chạy (không thấy `✅ Seeded`):**
