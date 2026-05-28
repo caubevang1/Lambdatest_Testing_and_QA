@@ -48,6 +48,8 @@ Configuration (do this first)
   - PORT=5000
   - SMTP_EMAIL=your_smtp_email
   - SMTP_PASS=your_smtp_password
+  - OTP_TEST_MODE=true            # optional: skip sending email OTP (test only)
+  - OTP_FIXED=123456              # optional: fixed OTP value for tests
   - VAPID_PUBLIC_KEY=your_vapid_public_key
   - VAPID_PRIVATE_KEY=your_vapid_private_key
 

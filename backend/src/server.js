@@ -11,6 +11,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { connectDB } from "./config/db.js";
 import { startCronJobs } from "./utils/cronJob.js";
+import { seedDefaultAccounts } from "./utils/seed.js";
 
 import authRoutes from "./routes/auth.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
@@ -24,10 +25,12 @@ import postRoutes from "./routes/post.routes.js";
 import commentRoutes from "./routes/comment.routes.js";
 import eventActionRoutes from "./routes/eventAction.routes.js";
 
-dotenv.config();
-const app = express();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const envPath = path.resolve(__dirname, "../.env");
+
+dotenv.config({ path: envPath });
+const app = express();
 
 app.use(cors());
 app.use(express.json());
@@ -35,6 +38,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/uploads", express.static("uploads"));
 
 await connectDB();
+await seedDefaultAccounts();
 startCronJobs();
 
 app.get("/", (req, res) => res.send("✅ VolunteerHub Backend API is running..."));

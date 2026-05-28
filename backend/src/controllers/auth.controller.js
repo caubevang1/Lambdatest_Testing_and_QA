@@ -76,16 +76,52 @@ const rollbackUpload = (req) => {
  */
 export const sendRegisterOtp = async (req, res) => {
   try {
-    const { email } = req.body;
+    const email = (req.body?.email || "").trim().toLowerCase();
+    console.log(`[OTP][REGISTER] Incoming request for: ${email || "<empty>"}`);
+
+    if (!email) {
+      return res.status(400).json({ message: "Vui lòng nhập email." });
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ message: "Email không đúng định dạng." });
+    }
+
     if (await UserRepository.findOne({ email }))
-      return res.status(400).json({ message: "Email đã tồn tại." });
+      return res.status(409).json({ message: "Email đã tồn tại." });
 
     const otp = generateOtp();
     await OtpRepository.createOtp(email, otp, "REGISTER");
+    console.log(`[OTP][REGISTER] OTP generated and saved for: ${email}`);
 
     await sendOtpEmail(email, otp, "Đăng ký tài khoản VolunteerHub");
+    console.log(`[OTP][REGISTER] Email sent successfully to: ${email}`);
     res.status(200).json({ message: "OTP đã được gửi." });
   } catch (err) {
+    console.error("[sendRegisterOtp] Error:", {
+      message: err?.message,
+      code: err?.code,
+      stack: err?.stack,
+    });
+
+    const email = (req.body?.email || "").trim().toLowerCase();
+    if (email) {
+      await OtpRepository.clearOtps(email, "REGISTER").catch(() => { });
+    }
+
+    if (
+      ["EAUTH", "ESOCKET", "ETIMEDOUT", "EENVELOPE", "ECONNECTION"].includes(
+        err?.code
+      ) ||
+      /SMTP|gmail|auth|login|Invalid login/i.test(err?.message || "")
+    ) {
+      return res.status(500).json({
+        message: "Không thể gửi OTP qua email. Vui lòng kiểm tra cấu hình SMTP.",
+        error: err.message,
+      });
+    }
+
     res.status(500).json({ message: "Lỗi server", error: err.message });
   }
 };
@@ -208,16 +244,34 @@ export const updateProfile = async (req, res) => {
  */
 export const sendResetOtp = async (req, res) => {
   try {
-    const { email } = req.body;
+    const email = (req.body?.email || "").trim().toLowerCase();
+    console.log(`[OTP][RESET] Incoming request for: ${email || "<empty>"}`);
+
+    if (!email) {
+      return res.status(400).json({ message: "Vui lòng nhập email." });
+    }
+
     if (!(await UserRepository.findOne({ email })))
       return res.status(404).json({ message: "Email không tồn tại." });
 
     const otp = generateOtp();
     await OtpRepository.createOtp(email, otp, "RESET");
+    console.log(`[OTP][RESET] OTP generated and saved for: ${email}`);
 
     await sendOtpEmail(email, otp, "Khôi phục mật khẩu");
+    console.log(`[OTP][RESET] Email sent successfully to: ${email}`);
     res.json({ message: "OTP đã gửi." });
   } catch (err) {
+    console.error("[sendResetOtp] Error:", {
+      message: err?.message,
+      code: err?.code,
+      stack: err?.stack,
+    });
+
+    const email = (req.body?.email || "").trim().toLowerCase();
+    if (email) {
+      await OtpRepository.clearOtps(email, "RESET").catch(() => { });
+    }
     res.status(500).json({ message: "Lỗi server", error: err.message });
   }
 };
