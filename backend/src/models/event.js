@@ -67,6 +67,7 @@ const eventSchema = new mongoose.Schema(
       required: true,
     },
     likesCount: { type: Number, default: 0 },
+    approvedParticipantsCount: { type: Number, default: 0 },
     sharesCount: { type: Number, default: 0 },
     viewsCount: { type: Number, default: 0 },
   },

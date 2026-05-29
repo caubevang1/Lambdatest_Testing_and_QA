@@ -145,58 +145,106 @@ export const getEventRegistrations = async (req, res) => {
 export const updateRegistrationStatus = async (req, res) => {
   try {
     const { status, rejectionReason } = req.body;
+    const registrationId = req.params.registrationId;
 
-    // Chuẩn bị dữ liệu cập nhật
-    const updateData = { status };
-    if (status === "rejected" && rejectionReason) {
-      updateData.rejectionReason = rejectionReason;
-    }
+    // Approve flow: reserve slot atomically on Event, then mark registration approved
+    if (status === "approved") {
+      const registration = await RegistrationRepository.findById(registrationId);
+      if (!registration)
+        return res.status(404).json({ message: "Không tìm thấy đơn đăng ký" });
 
-    const updatedReg = await RegistrationRepository.findByIdAndUpdate(
-      req.params.registrationId,
-      updateData
-    );
-    if (!updatedReg)
-      return res.status(404).json({ message: "Không tìm thấy đơn đăng ký" });
+      if (registration.status !== "pending")
+        return res
+          .status(409)
+          .json({ message: "Đơn đăng ký đã được xử lý trước đó." });
 
-    const populatedEvent = await EventRepository.findById(
-      updatedReg.event,
-      "name"
-    );
+      // Try to reserve a participant slot
+      const reserved = await EventRepository.reserveParticipantSlot(
+        registration.event
+      );
+      if (!reserved)
+        return res
+          .status(409)
+          .json({ message: "Sự kiện đã đủ người tham gia." });
 
-    res.status(200).json({
-      message: "Cập nhật trạng thái thành công",
-      registration: { ...updatedReg, event: populatedEvent },
-    });
+      // Try to atomically update the registration only if still pending
+      const updatedReg = await RegistrationRepository.findOneAndUpdate(
+        { _id: registrationId, status: "pending" },
+        { status: "approved" }
+      );
 
-    if (updatedReg && populatedEvent) {
+      if (!updatedReg) {
+        // registration was processed by another concurrent flow — release reserved slot
+        await EventRepository.releaseParticipantSlot(registration.event).catch(() => { });
+        return res
+          .status(409)
+          .json({ message: "Đơn đã được xử lý bởi luồng khác." });
+      }
+
+      const populatedEvent = await EventRepository.findById(updatedReg.event, "name");
       const clientUrl =
         process.env.CLIENT_URL ||
         process.env.FRONTEND_URL ||
         process.env.PUBLIC_CLIENT_URL ||
         "http://localhost:3000";
       const url = `${clientUrl}/my-registrations`;
-      const title =
-        status === "approved"
-          ? "Đăng ký thành công! ✅"
-          : "Thông báo từ chối ❌";
-      let message =
-        status === "approved"
-          ? `Yêu cầu tham gia sự kiện "${populatedEvent.name}" đã được chấp thuận.`
-          : `Rất tiếc, yêu cầu đăng ký tham gia sự kiện "${populatedEvent.name}" đã bị từ chối.`;
+      const title = "Đăng ký thành công! ✅";
+      const message = `Yêu cầu tham gia sự kiện "${populatedEvent?.name || ''}" đã được chấp thuận.`;
 
-      // Thêm lý do từ chối vào thông báo nếu có
-      if (status === "rejected" && rejectionReason) {
-        message += ` Lý do: ${rejectionReason}`;
-      }
+      res.status(200).json({
+        message: "Cập nhật trạng thái thành công",
+        registration: { ...updatedReg, event: populatedEvent },
+      });
 
-      await sendPushNotification(
-        updatedReg.volunteer,
-        title,
-        message,
-        url
-      ).catch(() => { });
+      await sendPushNotification(updatedReg.volunteer, title, message, url).catch(() => { });
+      return;
     }
+
+    // Reject flow: only reject if still pending
+    if (status === "rejected") {
+      const updateData = { status: "rejected" };
+      if (rejectionReason) updateData.rejectionReason = rejectionReason;
+
+      const updatedReg = await RegistrationRepository.findOneAndUpdate(
+        { _id: registrationId, status: "pending" },
+        updateData
+      );
+      if (!updatedReg)
+        return res.status(409).json({ message: "Đơn đã được xử lý trước đó." });
+
+      const populatedEvent = await EventRepository.findById(updatedReg.event, "name");
+      const clientUrl =
+        process.env.CLIENT_URL ||
+        process.env.FRONTEND_URL ||
+        process.env.PUBLIC_CLIENT_URL ||
+        "http://localhost:3000";
+      const url = `${clientUrl}/my-registrations`;
+      const title = "Thông báo từ chối ❌";
+      let message = `Rất tiếc, yêu cầu đăng ký tham gia sự kiện "${populatedEvent?.name || ''}" đã bị từ chối.`;
+      if (rejectionReason) message += ` Lý do: ${rejectionReason}`;
+
+      res.status(200).json({
+        message: "Cập nhật trạng thái thành công",
+        registration: { ...updatedReg, event: populatedEvent },
+      });
+
+      await sendPushNotification(updatedReg.volunteer, title, message, url).catch(() => { });
+      return;
+    }
+
+    // Default fallback for other statuses: apply directly
+    const fallbackUpdated = await RegistrationRepository.findByIdAndUpdate(
+      registrationId,
+      { status }
+    );
+    if (!fallbackUpdated)
+      return res.status(404).json({ message: "Không tìm thấy đơn đăng ký" });
+
+    const populatedEvent = await EventRepository.findById(fallbackUpdated.event, "name");
+    res.status(200).json({
+      message: "Cập nhật trạng thái thành công",
+      registration: { ...fallbackUpdated, event: populatedEvent },
+    });
   } catch (error) {
     res.status(500).json({ message: "Lỗi server", error: error.message });
   }

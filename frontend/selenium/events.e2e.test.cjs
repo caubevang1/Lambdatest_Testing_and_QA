@@ -120,8 +120,6 @@ describe("Events UI", () => {
 
             const okBtn = await driver.findElement(By.css(".swal2-confirm"));
             await driver.executeScript("arguments[0].click();", okBtn);
-
-            console.log("✅ Đã ép click nút OK trên Swal thành công!");
         } else {
             // ...
             // Fallback: duyệt qua API

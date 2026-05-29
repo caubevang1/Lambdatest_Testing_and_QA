@@ -523,6 +523,42 @@ class EventRepository extends BaseRepository {
   async incrementViewCount(eventId) {
     return await this.findByIdAndUpdate(eventId, { $inc: { viewsCount: 1 } });
   }
+
+  /**
+   * Reserve a participant slot atomically using MongoDB findOneAndUpdate with $expr.
+   * Returns the updated event when reserved, or null when no slot available.
+   */
+  async reserveParticipantSlot(eventId) {
+    try {
+      const filter = {
+        _id: eventId,
+        status: "approved",
+        $expr: {
+          $lt: [
+            { $ifNull: ["$approvedParticipantsCount", 0] },
+            "$maxParticipants",
+          ],
+        },
+      };
+      const update = { $inc: { approvedParticipantsCount: 1 } };
+      const doc = await this.model.findOneAndUpdate(filter, update, { new: true }).lean();
+      return this.transform(doc);
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Release a previously reserved participant slot (decrement counter if > 0).
+   */
+  async releaseParticipantSlot(eventId) {
+    const doc = await this.model.findOneAndUpdate(
+      { _id: eventId, approvedParticipantsCount: { $gt: 0 } },
+      { $inc: { approvedParticipantsCount: -1 } },
+      { new: true }
+    ).lean();
+    return this.transform(doc);
+  }
 }
 
 export default new EventRepository();
